@@ -7,12 +7,11 @@ services:
     ports:
       - "3000:3000"
     environment:
-      # Database connection details
-      DB_HOST=postgres
-      DB_PORT=5432
-      DB_USER=postgres
-      DB_PASSWORD=postgres
-      DB_NAME=mydb
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_NAME: mydb
     depends_on:
       - postgres
 
