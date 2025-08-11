@@ -1,0 +1,313 @@
+import { Request, Response } from 'express';
+import { ApplicationService } from '../services/application.service';
+import { logger } from '../utils/logger';
+import { serializeUser } from '../utils/serializer';
+
+export class ApplicationController {
+    private applicationService: ApplicationService;
+
+    constructor(applicationService: ApplicationService) {
+        this.applicationService = applicationService;
+    }
+
+    /**
+     * Create bulk applications for candidates
+     * SRP: Single responsibility for handling bulk application creation requests
+     */
+    public async createBulkApplications(req: Request, res: Response): Promise<void> {
+        try {
+            const { jobId, candidateEmails, candidateDetails, notes } = req.body;
+            const recruiterId = BigInt(req.user!.userId);
+
+            // Fetch user to get organizationId
+            const user = await this.applicationService.prisma.user.findUnique({
+                where: { id: recruiterId },
+                select: { organizationId: true }
+            });
+
+            if (!user?.organizationId) {
+                res.status(400).json({
+                    success: false,
+                    error: 'Bad request',
+                    message: 'Organization ID is required for creating applications'
+                });
+                return;
+            }
+
+            const organizationId = user.organizationId;
+
+            const result = await this.applicationService.createBulkApplications(
+                { jobId, candidateEmails, candidateDetails, notes },
+                recruiterId,
+                organizationId
+            );
+
+            res.status(200).json({
+                success: true,
+                data: result,
+                message: `Bulk application creation completed. ${result.successful} successful, ${result.failed} failed.`
+            });
+
+        } catch (error) {
+            logger.error('Error in createBulkApplications controller', { error, userId: req.user?.userId });
+
+            const errorMessage = error instanceof Error ? error.message : 'Internal server error';
+            const statusCode = error instanceof Error && error.message.includes('not found') ? 404 : 500;
+
+            res.status(statusCode).json({
+                success: false,
+                error: statusCode === 404 ? 'Not found' : 'Internal server error',
+                message: errorMessage
+            });
+        }
+    }
+
+    /**
+     * Get applications by job ID
+     * SRP: Single responsibility for handling application retrieval requests
+     */
+    public async getApplicationsByJob(req: Request, res: Response): Promise<void> {
+        try {
+            const jobId = parseInt(req.params.jobId);
+            const recruiterId = BigInt(req.user!.userId);
+
+            const { page, limit, sortBy, sortOrder } = req.query;
+            const pagination = {
+                page: page ? parseInt(page as string) : 1,
+                limit: limit ? parseInt(limit as string) : 10,
+                sortBy: sortBy as string || 'createdAt',
+                sortOrder: sortOrder as 'asc' | 'desc' || 'desc'
+            };
+
+            const result = await this.applicationService.getApplicationsByJob(
+                jobId,
+                recruiterId,
+                pagination
+            );
+
+            res.status(200).json({
+                success: true,
+                data: result,
+                message: 'Applications retrieved successfully'
+            });
+
+        } catch (error) {
+            logger.error('Error in getApplicationsByJob controller', { error, userId: req.user?.userId });
+
+            const errorMessage = error instanceof Error ? error.message : 'Internal server error';
+            const statusCode = error instanceof Error && error.message.includes('not found') ? 404 : 500;
+
+            res.status(statusCode).json({
+                success: false,
+                error: statusCode === 404 ? 'Not found' : 'Internal server error',
+                message: errorMessage
+            });
+        }
+    }
+
+    /**
+     * Update application status
+     * SRP: Single responsibility for handling application status update requests
+     */
+    public async updateApplicationStatus(req: Request, res: Response): Promise<void> {
+        try {
+            const applicationId = BigInt(req.params.id);
+            const recruiterId = BigInt(req.user!.userId);
+            const updateData = req.body;
+
+            const result = await this.applicationService.updateApplicationStatus(
+                applicationId,
+                recruiterId,
+                updateData
+            );
+
+            res.status(200).json({
+                success: true,
+                data: {
+                    ...result,
+                    candidate: serializeUser(result.candidate)
+                },
+                message: 'Application status updated successfully'
+            });
+
+        } catch (error) {
+            logger.error('Error in updateApplicationStatus controller', { error, userId: req.user?.userId });
+
+            const errorMessage = error instanceof Error ? error.message : 'Internal server error';
+            const statusCode = error instanceof Error && error.message.includes('not found') ? 404 : 500;
+
+            res.status(statusCode).json({
+                success: false,
+                error: statusCode === 404 ? 'Not found' : 'Internal server error',
+                message: errorMessage
+            });
+        }
+    }
+
+    /**
+     * Get application by ID
+     * SRP: Single responsibility for handling single application retrieval requests
+     */
+    public async getApplicationById(req: Request, res: Response): Promise<void> {
+        try {
+            const applicationId = BigInt(req.params.id);
+            const recruiterId = BigInt(req.user!.userId);
+
+            const application = await this.applicationService.findOneByCriteria({
+                id: applicationId,
+                recruiterId
+            });
+
+            if (!application) {
+                res.status(404).json({
+                    success: false,
+                    error: 'Not found',
+                    message: 'Application not found or you do not have permission to view it'
+                });
+                return;
+            }
+
+            res.status(200).json({
+                success: true,
+                data: application,
+                message: 'Application retrieved successfully'
+            });
+
+        } catch (error) {
+            logger.error('Error in getApplicationById controller', { error, userId: req.user?.userId });
+
+            res.status(500).json({
+                success: false,
+                error: 'Internal server error',
+                message: 'Failed to retrieve application'
+            });
+        }
+    }
+
+    /**
+     * Get all applications for a recruiter
+     * SRP: Single responsibility for handling recruiter's applications retrieval requests
+     */
+    public async getRecruiterApplications(req: Request, res: Response): Promise<void> {
+        try {
+            const recruiterId = BigInt(req.user!.userId);
+
+            const { page, limit, sortBy, sortOrder, status } = req.query;
+            const pagination = {
+                page: page ? parseInt(page as string) : 1,
+                limit: limit ? parseInt(limit as string) : 10,
+                sortBy: sortBy as string || 'createdAt',
+                sortOrder: sortOrder as 'asc' | 'desc' || 'desc'
+            };
+
+            const whereClause: any = { recruiterId };
+            if (status) {
+                whereClause.status = status;
+            }
+
+            const [applications, total] = await Promise.all([
+                this.applicationService.findMany(whereClause, pagination),
+                this.applicationService.count(whereClause)
+            ]);
+
+            const totalPages = Math.ceil(total / pagination.limit);
+
+            res.status(200).json({
+                success: true,
+                data: {
+                    applications: applications.map(app => ({
+                        ...app,
+                        candidate: serializeUser(app.candidate)
+                    })),
+                    pagination: {
+                        page: pagination.page,
+                        limit: pagination.limit,
+                        total,
+                        totalPages,
+                        hasNext: pagination.page < totalPages,
+                        hasPrev: pagination.page > 1
+                    }
+                },
+                message: 'Applications retrieved successfully'
+            });
+
+        } catch (error) {
+            logger.error('Error in getRecruiterApplications controller', { error, userId: req.user?.userId });
+
+            res.status(500).json({
+                success: false,
+                error: 'Internal server error',
+                message: 'Failed to retrieve applications'
+            });
+        }
+    }
+
+    /**
+     * Get application statistics
+     * SRP: Single responsibility for handling application statistics requests
+     */
+    public async getApplicationStats(req: Request, res: Response): Promise<void> {
+        try {
+            const recruiterId = BigInt(req.user!.userId);
+
+            const stats = await this.applicationService.getApplicationStats(recruiterId);
+
+            res.status(200).json({
+                success: true,
+                data: stats,
+                message: 'Application statistics retrieved successfully'
+            });
+
+        } catch (error) {
+            logger.error('Error in getApplicationStats controller', { error, userId: req.user?.userId });
+
+            res.status(500).json({
+                success: false,
+                error: 'Internal server error',
+                message: 'Failed to retrieve application statistics'
+            });
+        }
+    }
+
+    /**
+     * Delete application (soft delete)
+     * SRP: Single responsibility for handling application deletion requests
+     */
+    public async deleteApplication(req: Request, res: Response): Promise<void> {
+        try {
+            const applicationId = BigInt(req.params.id);
+            const recruiterId = BigInt(req.user!.userId);
+
+            // Verify application belongs to recruiter
+            const application = await this.applicationService.findOneByCriteria({
+                id: applicationId,
+                recruiterId
+            });
+
+            if (!application) {
+                res.status(404).json({
+                    success: false,
+                    error: 'Not found',
+                    message: 'Application not found or you do not have permission to delete it'
+                });
+                return;
+            }
+
+            await this.applicationService.delete(applicationId.toString());
+
+            res.status(200).json({
+                success: true,
+                message: 'Application deleted successfully'
+            });
+
+        } catch (error) {
+            logger.error('Error in deleteApplication controller', { error, userId: req.user?.userId });
+
+            res.status(500).json({
+                success: false,
+                error: 'Internal server error',
+                message: 'Failed to delete application'
+            });
+        }
+    }
+} 

@@ -1,0 +1,162 @@
+Name,Level,Problem Statement,Input Format,Constraints,Input Example,Output Format,Output Example,Explanation,Editorial Answer in C++,Test Case 1 Input,Test Case 1 Output,Test Case 2 Input,Test Case 2 Output,Test Case 3 Input,Test Case 3 Output
+Two Sum,Easy,"Given an array of integers nums and an integer target, return True if there are two numbers in the array that add up to the target, and False otherwise.","The first line contains an integer t, the number of test cases. 
+For each test case: 
+The first line contains an integer n, the size of the array. 
+The second line contains n integers, the elements of the array nums. 
+The third line contains an integer k, the target sum.""","1≤ t≤2×10^3
+2≤ n≤2×10^5
+0≤ ai≤10^9","2
+3
+4 6 2
+8
+5
+1 2 4 5 2
+100","For each test case, print True if there are two numbers in the array that sum up to k. Otherwise, print False.","True
+False","Test Case 1:
+Array: [4, 6, 2], Target: 8
+The numbers 6 and 2 sum up to 8, so the output is True.
+
+Test Case 2:
+Array: [1, 2, 4, 5, 2], Target: 100
+No two numbers in the array sum to 100, so the output is False.","#include <iostream>
+#include <vector>
+#include <unordered_set>
+using namespace std;
+
+bool twoSum(vector<int>& nums, int target) {
+    unordered_set<int> seen;
+    for (int num : nums) {
+        // Check if the complement exists in the set
+        int complement = target - num;
+        if (seen.find(complement) != seen.end()) {
+            return true; // If found, return true
+        }
+        // Add the current number to the set
+        seen.insert(num);
+    }
+    return false; // If no pair is found, return false
+}
+
+int main() {
+    int t;
+    cin >> t; // Read the number of test cases
+    while (t--) {
+        int n, target;
+        cin >> n; // Read size of the array
+        vector<int> nums(n);
+        
+        for (int i = 0; i < n; i++) {
+            cin >> nums[i]; // Read the elements of the array
+        }
+        
+        cin >> target; // Read the target sum
+        if (twoSum(nums, target)) {
+            cout << ""True"" << endl; // Output True if the pair is found
+        } else {
+            cout << ""False"" << endl; // Output False if the pair is not found
+        }
+    }
+    return 0;
+}
+","1
+5
+10 15 3 7 8
+16
+",FALSE,"1
+4
+1 2 3 4
+5
+",TRUE,"1
+3
+11 15 6
+22
+",TRUE
+Reverse Integer,Medium,"Given a 32-bit signed integer, reverse digits of an integer. If the reversed integer overflows, return 0.","The first line contains an integer t, the number of test cases. 
+For each test case: The first line contains the integer n.",-2^31 ≤ n ≤ 2^31 - 1,"3
+123
+-123
+120","For each test case, return the reversed integer. If it overflows, return 0.","321
+-321
+21","Test Case 1:
+Input:
+
+Copy
+1
+123
+Explanation:
+
+Number: 123
+
+The number 123 is reversed to become 321.
+
+There are no leading zeros or overflows, so the result is simply the reversed number.
+
+Output: 321
+
+Test Case 2:
+Input:
+
+diff
+Copy
+1
+-123
+Explanation:
+
+Number: -123
+
+The number -123 is reversed to become -321.
+
+The negative sign is preserved, and the digits are reversed.
+
+Output: -321
+
+Test Case 3:
+Input:
+
+Copy
+1
+120
+Explanation:
+
+Number: 120
+
+The number 120 is reversed to become 021.
+
+However, leading zeros are discarded, so the final result is 21.
+
+Output: 21
+","#include <iostream>
+#include <climits>
+using namespace std;
+
+int reverse(int x) {
+    long long rev = 0; // To handle overflow cases
+    while (x != 0) {
+        int digit = x % 10;
+        rev = rev * 10 + digit;
+        x /= 10;
+        // Check for overflow
+        if (rev > INT_MAX || rev < INT_MIN) {
+            return 0;
+        }
+    }
+    return rev;
+}
+
+int main() {
+    int t;
+    cin >> t; // Read the number of test cases
+    while (t--) {
+        int n;
+        cin >> n; // Read the integer to reverse
+        cout << reverse(n) << endl; // Output the reversed integer
+    }
+    return 0;
+}
+","1
+0
+",0,"1
+1000000000
+",1,"1
+2147483647
+",0
